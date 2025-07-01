@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Support AI Chatbot</title>
+    <meta name="description" content="AI-powered chatbot for Apple customer support and troubleshooting">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js CDN -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Custom styles -->
+    <style>
+        .chat-container {
+            height: calc(100vh - 180px);
+        }
+        .chat-messages {
+            height: calc(100% - 70px);
+            overflow-y: auto;
+        }
+        .typing-indicator::after {
+            content: '';
+            animation: typing 1.5s infinite;
+        }
+        @keyframes typing {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+            100% { content: ''; }
+        }
+        .message-bubble {
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .user-message {
+            background-color: #007AFF;
+            color: white;
+            border-radius: 18px 18px 0 18px;
+        }
+        .bot-message {
+            background-color: #F2F2F7;
+            color: #1D1D1F;
+            border-radius: 18px 18px 18px 0;
+        }
+        .quick-reply {
+            transition: all 0.2s ease;
+        }
+        .quick-reply:hover {
+            background-color: #007AFF;
+            color: white;
+        }
+        /* Custom scrollbar */
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #BFBFBF;
+            border-radius: 3px;
+        }
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #A1A1A6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans antialiased text-gray-900">
+    <div x-data="chatbot" class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-white shadow-sm">
+            <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <img src="https://logo.clearbit.com/apple.com" alt="Apple Logo" class="h-8 w-auto">
+                    <h1 class="text-xl font-semibold">Apple Support</h1>
+                </div>
+                <div class="text-sm text-gray-500">
+                    <span x-text="currentTime"></span>
+                </div>
+            </div>
+        </header>
+        <!-- Main Content -->
+        <main class="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden chat-container">
+                <!-- Chat Header -->
+                <div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="font-medium">Apple Support Assistant</h2>
+                            <p class="text-xs text-green-600 flex items-center">
+                                <span class="w-2 h-2 bg-green-500 rounded-full inline-block mr-1"></span>
+                                Online
+                            </p>
+                        </div>
+                    </div>
+                    <button @click="resetChat" class="text-gray-400 hover:text-gray-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                </div>
+                <!-- Chat Messages -->
+                <div class="px-6 py-4 chat-messages" x-ref="chatContainer">
+                    <template x-for="(message, index) in messages" :key="index">
+                        <div :class="`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} mb-4`">
+                            <div :class="`message-bubble p-3 ${message.sender === 'user' ? 'user-message' : 'bot-message'}`">
+                                <p x-text="message.text"></p>
+                                <template x-if="message.options && message.options.length > 0">
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                        <template x-for="(option, optIndex) in message.options" :key="optIndex">
+                                            <button 
+                                                @click="sendMessage(option)"
+                                                class="quick-reply text-xs py-1 px-3 bg-gray-200 text-gray-800 rounded-full hover:bg-blue-500 hover:text-white transition-colors">
+                                                <span x-text="option"></span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                    <!-- Typing indicator -->
+                    <div x-show="isTyping" class="flex justify-start mb-4">
+                        <div class="message-bubble bot-message p-3">
+                            <p class="typing-indicator">Typing</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Chat Input -->
+                <div class="px-6 py-3 bg-gray-50 border-t border-gray-200">
+                    <form @submit.prevent="handleSubmit" class="flex items-center space-x-2">
+                        <input 
+                            x-model="userInput" 
+                            type="text" 
+                            placeholder="Type your question here..." 
+                            class="flex-1 py-2 px-4 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                            :disabled="isTyping">
+                        <button 
+                            type="submit" 
+                            class="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+                            :disabled="!userInput.trim() || isTyping">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <!-- Footer info -->
+            <div class="mt-4 text-center text-xs text-gray-500">
+                <p>This AI assistant is continuously learning from interactions to improve service quality.</p>
+                <p class="mt-1">For urgent matters, please contact <a href="#" class="text-blue-500 hover:underline">Apple Support directly</a>.</p>
+            </div>
+        </main>
+    </div>
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('chatbot', () => ({
+                userInput: '',
+                messages: [],
+                isTyping: false,
+                currentTime: '',
+                init() {
+                    this.updateTime();
+                    setInterval(() => this.updateTime(), 60000);
+                    // Initial greeting
+                    setTimeout(() => {
+                        this.addBotMessage("Hello! I'm Apple's Support Assistant. How can I help you today?", [
+                            "iPhone issues",
+                            "Mac problems",
+                            "Apple Watch support",
+                            "AirPods troubleshooting",
+                            "Apple ID help"
+                        ]);
+                    }, 500);
+                    // Watch for new messages and scroll to bottom
+                    this.$watch('messages', () => {
+                        setTimeout(() => {
+                            this.scrollToBottom();
+                        }, 50);
+                    });
+                },
+                updateTime() {
+                    const now = new Date();
+                    this.currentTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                },
+                scrollToBottom() {
+                    if (this.$refs.chatContainer) {
+                        this.$refs.chatContainer.scrollTop = this.$refs.chatContainer.scrollHeight;
+                    }
+                },
+                handleSubmit() {
+                    if (!this.userInput.trim() || this.isTyping) return;
+                    const userMessage = this.userInput.trim();
+                    this.addUserMessage(userMessage);
+                    this.userInput = '';
+                    this.generateResponse(userMessage);
+                },
+                addUserMessage(text) {
+                    this.messages.push({
+                        text,
+                        sender: 'user',
+                        timestamp: new Date()
+                    });
+                },
+                addBotMessage(text, options = []) {
+                    this.messages.push({
+                        text,
+                        sender: 'bot',
+                        timestamp: new Date(),
+                        options
+                    });
+                },
+                sendMessage(text) {
+                    this.addUserMessage(text);
+                    this.generateResponse(text);
+                },
+                generateResponse(userMessage) {
+                    this.isTyping = true;
+                    // Simulate API delay
+                    setTimeout(() => {
+                        this.isTyping = false;
+                        // Process the user message and generate a response
+                        const response = this.getAIResponse(userMessage);
+                        this.addBotMessage(response.text, response.options);
+                    }, 1500);
+                },
+                getAIResponse(userMessage) {
+                    // This would be replaced with actual AI processing in a real implementation
+                    const message = userMessage.toLowerCase();
+                    // iPhone related issues
+                    if (message.includes('iphone') || message === 'iphone issues') {
+                        if (message.includes('battery') || message.includes('drain')) {
+                            return {
+                                text: "Battery issues can be caused by various factors. Have you noticed the battery draining faster after a recent iOS update or app installation?",
+                                options: ["After iOS update", "After new app", "Always been poor", "Battery health is low"]
+                            };
+                        } else if (message.includes('won\'t turn on') || message.includes('not turning on')) {
+                            return {
+                                text: "Let's try to resolve this. First, let's try a force restart. For iPhone 8 or later: Press and quickly release Volume Up, then Volume Down, then hold the Side button until the Apple logo appears. Did this help?",
+                                options: ["Yes, it worked", "No, still not turning on", "How do I force restart older models?"]
+                            };
+                        } else if (message.includes('screen') || message.includes('display')) {
+                            return {
+                                options: ["Black screen", "Lines/artifacts", "Unresponsive touch", "Cracked screen"]
+                            };
+                        } else {
+                            return {
+                                text: "I can help with iPhone issues. What specific problem are you experiencing?",
+                                options: ["Battery problems", "Won't turn on", "Screen issues", "Slow performance", "iOS update"]
+                            };
+                        }
+                    }
+                    // Mac related issues
+                    else if (message.includes('mac') || message === 'mac problems') {
+                        if (message.includes('slow') || message.includes('performance')) {
+                            return {
+                                text: "Mac performance issues can have several causes. Let's check some common ones. How much free storage space do you have on your Mac?",
+                                options: ["Less than 10GB", "10-50GB", "More than 50GB", "Not sure how to check"]
+                            };
+                        } else if (message.includes('startup') || message.includes('boot') || message.includes('won\'t turn on')) {
+                            return {
+                                text: "If your Mac isn't starting up properly, we can try some troubleshooting steps. Do you see the Apple logo when you turn it on?",
+                                options: ["Yes, but it gets stuck", "No, just a blank screen", "I see a folder with question mark", "It turns on but shows error"]
+                            };
+                        } else {
+                            return {
+                                text: "I can help with Mac issues. What specific problem are you experiencing?",
+                                options: ["Slow performance", "Won't start up", "Software issues", "Hardware problems", "macOS update"]
+                            };
+                        }
+                    }
+                    // Apple Watch support
+                    else if (message.includes('watch') || message === 'apple watch support') {
+                        if (message.includes('pair') || message.includes('pairing')) {
+                            return {
+                                text: "If you're having trouble pairing your Apple Watch, make sure Bluetooth is turned on on your iPhone and both devices are charged. Would you like specific pairing instructions?",
+                                options: ["Yes, show pairing steps", "Watch won't enter pairing mode", "iPhone doesn't detect watch"]
+                            };
+                        } else if (message.includes('battery') || message.includes('charging')) {
+                            return {
+                                text: "Apple Watch battery issues can often be resolved. Is your watch not charging at all, or is the battery draining too quickly?",
+                                options: ["Not charging", "Drains quickly", "Turns off unexpectedly"]
+                            };
+                        } else {
+                            return {
+                                text: "I can help with Apple Watch issues. What specific problem are you experiencing?",
+                                options: ["Pairing problems", "Battery/charging", "Watch face/display", "Notifications", "Fitness tracking"]
+                            };
+                        }
+                    }
+                    // AirPods troubleshooting
+                    else if (message.includes('airpod') || message === 'airpods troubleshooting') {
+                        if (message.includes('connect') || message.includes('pairing')) {
+                            return {
+                                text: "Connection issues with AirPods are common. Let's try resetting them. Put both AirPods in the case, open the lid, press and hold the setup button on the back for about 15 seconds until the status light flashes amber, then white. Did this help?",
+                                options: ["Yes, it worked", "No, still not connecting", "How do I pair after reset?"]
+                            };
+                        } else if (message.includes('sound') || message.includes('audio') || message.includes('quality')) {
+                            return {
+                                text: "If you're experiencing sound quality issues, let's check a few things. Are both AirPods having the issue or just one side?",
+                                options: ["Both sides", "Left AirPod only", "Right AirPod only", "Sound cuts in and out"]
+                            };
+                        } else {
+                            return {
+                                text: "I can help with AirPods issues. What specific problem are you experiencing?",
+                                options: ["Connection problems", "Sound quality", "One AirPod not working", "Case not charging", "Fit issues"]
+                            };
+                        }
+                    }
+                    // Apple ID help
+                    else if (message.includes('apple id') || message === 'apple id help') {
+                        if (message.includes('password') || message.includes('forgot')) {
+                            return {
+                                text: "If you've forgotten your Apple ID password, you can reset it at appleid.apple.com. Would you like me to guide you through the process?",
+                                options: ["Yes, guide me", "Two-factor authentication issues", "Can't access recovery email"]
+                            };
+                        } else if (message.includes('verification') || message.includes('two-factor') || message.includes('2fa')) {
+                            return {
+                                text: "Two-factor authentication adds extra security to your Apple ID. Are you having trouble receiving verification codes?",
+                                options: ["Not receiving codes", "Lost access to trusted devices", "Need to add new trusted phone number"]
+                            };
+                        } else {
+                            return {
+                                text: "I can help with Apple ID issues. What specific problem are you experiencing?",
+                                options: ["Forgot password", "Two-factor authentication", "Payment information", "Subscription management", "Account security"]
+                            };
+                        }
+                    }
+                    // After iOS update
+                    else if (message === 'after ios update') {
+                        return {
+                            text: "It's common to experience temporary battery drain after an iOS update as your device reindexes content and adapts to the new software. This usually resolves within 48 hours. In the meantime, you can check which apps are using the most battery in Settings > Battery. Would you like more battery saving tips?",
+                            options: ["Yes, show battery tips", "It's been more than 48 hours", "Check for iOS updates"]
+                        };
+                    }
+                    // After new app
+                    else if (message === 'after new app') {
+                        return {
+                            text: "Some apps can significantly impact battery life, especially if they run in the background. Check which apps are using the most battery in Settings > Battery. Which recently installed apps do you suspect might be causing the issue?",
+                            options: ["Social media apps", "Games", "Navigation apps", "How do I close background apps?"]
+                        };
+                    }
+                    // Battery health is low
+                    else if (message === 'battery health is low') {
+                        return {
+                            text: "If your iPhone's battery health is below 80%, you might want to consider a battery replacement. You can check your battery health in Settings > Battery > Battery Health. Would you like information about Apple's battery replacement service?",
+                            options: ["Yes, battery replacement info", "Battery health percentage?", "Extend current battery life"]
+                        };
+                    }
+                    // Default responses for unrecognized queries
+                    else {
+                        return {
+                            text: "I'd be happy to help with that. To better assist you, could you please specify which Apple product you're having issues with?",
+                            options: ["iPhone", "Mac", "iPad", "Apple Watch", "AirPods", "Apple TV"]
+                        };
+                    }
+                },
+                resetChat() {
+                    this.messages = [];
+                    setTimeout(() => {
+                        this.addBotMessage("Hello! I'm Apple's Support Assistant. How can I help you today?", [
+                            "iPhone issues",
+                            "Mac problems",
+                            "Apple Watch support",
+                            "AirPods troubleshooting",
+                            "Apple ID help"
+                        ]);
+                    }, 300);
+                }
+            }));
+        });
+    </script>
+</body>
+</html>
+1. **Responsive Design**: Works on all device sizes using Tailwind CSS
+2. **Interactive Chatbot**: Simulates an AI assistant using Alpine.js for state management
+3. **Realistic Conversations**: Includes product-specific troubleshooting flows for Apple devices
+4. **Professional UI**: Clean Apple-inspired design with the company logo
+5. **Quick Reply Buttons**: Makes navigation easier for users
+6. **Typing Indicators**: Provides visual feedback during "AI processing"
+7. **Scrolling Chat History**: Automatically scrolls to the latest messages
+8. **Reset Functionality**: Allows users to restart the conversation
